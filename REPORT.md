@@ -32,21 +32,24 @@ Descriptive statistics for `age` across all `23,705` images:
 
 ### 2.3. Class Balance Analysis (`gender` and `race`)
 
-The Imbalance Ratio ($\text{IR} = \max_c N_c / \min_c N_c$) quantifies label skewness:
+The Imbalance Ratio (`IR = max(N_c) / min(N_c)`) quantifies label skewness:
 
-1. **Gender ($\text{IR} = 1.10\text{x}$)**:
-   - `Male (0)`: $12,391$ (`52.27%`)
-   - `Female (1)`: $11,314$ (`47.73%`)
+1. **Gender (`IR = 1.10x`)**:
+   - `Male (0)`: `12,391` (`52.27%`)
+   - `Female (1)`: `11,314` (`47.73%`)
 
-2. **Race ($\text{IR} = 5.96\text{x}$)**:
-   - `White (0)`: $10,078$ (`42.51%`)
-   - `Black (1)`: $4,526$ (`19.09%`)
-   - `Indian (3)`: $3,975$ (`16.77%`)
-   - `Asian (2)`: $3,434$ (`14.49%`)
-   - `Others (4)`: $1,692$ (`7.14%`)
+2. **Race (`IR = 5.96x`)**:
+   - `White (0)`: `10,078` (`42.51%`)
+   - `Black (1)`: `4,526` (`19.09%`)
+   - `Indian (3)`: `3,975` (`16.77%`)
+   - `Asian (2)`: `3,434` (`14.49%`)
+   - `Others (4)`: `1,692` (`7.14%`)
 
-To prevent the majority `White` class from dominating gradient updates, inverse-frequency class weights $w_c = \frac{N_{\text{total}}}{C \times N_c}$ are computed:
-$$\mathbf{w}_{\text{race}} = [0.470,\ 1.048,\ 1.381,\ 1.193,\ 2.802]$$
+To prevent the majority `White` class from dominating gradient updates, inverse-frequency class weights `w_c = N_total / (C * N_c)` are computed:
+
+```text
+w_race = [0.470, 1.048, 1.381, 1.193, 2.802]
+```
 
 ![Gender and Race Distributions](assets/02_eda_gender_race_distribution.png)
 
@@ -63,8 +66,10 @@ To preserve joint demographic proportions, the dataset is split into **70% Train
 ### 2.5. Pixel Statistics
 
 All sampled images are `200×200` RGB face chips with channel statistics:
-$$\mu_{RGB} = [0.5926, 0.4526, 0.3864], \quad \sigma_{RGB} = [0.2573, 0.2288, 0.2246]$$
-The elevated red channel mean ($\mu_R = 0.5926$) reflects skin-tone dominance in tightly cropped facial images.
+- **Channel Mean (`UTK_MEAN`)**: `[0.5926, 0.4526, 0.3864]`
+- **Channel Std (`UTK_STD`)**: `[0.2573, 0.2288, 0.2246]`
+
+The elevated red channel mean (`0.5926`) reflects skin-tone dominance in tightly cropped facial images.
 
 ---
 
@@ -72,37 +77,57 @@ The elevated red channel mean ($\mu_R = 0.5926$) reflects skin-tone dominance in
 
 ### 3.1. Custom CNN Architecture (`UTKFaceBackbone`)
 
-Input images are resized to `128×128` and normalized with $\mu_{RGB}$ and $\sigma_{RGB}$. Training augmentations include `RandomHorizontalFlip(p=0.5)`, `RandomRotation(10°)`, and `ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15)`.
+Input images are resized to `128×128` and normalized with `UTK_MEAN` and `UTK_STD`. Training augmentations include `RandomHorizontalFlip(p=0.5)`, `RandomRotation(10°)`, and `ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15)`.
 
 The custom feature extractor consists of 4 sequential convolutional blocks (`ConvBlock`):
-$$\text{Conv2d}(3\times 3, \text{padding}=1, \text{bias}=\text{False}) \rightarrow \text{BatchNorm2d} \rightarrow \text{LeakyReLU}(0.01) \rightarrow \text{MaxPool2d}(2\times 2)$$
+
+```text
+Conv2d(3x3, padding=1, bias=False) -> BatchNorm2d -> LeakyReLU(0.01) -> MaxPool2d(2x2)
+```
 
 - **Spatial Progression**: `3×128×128 → 32×64×64 → 64×32×32 → 128×16×16 → 256×8×8`.
 - **Feature Head**: `AdaptiveAvgPool2d((1, 1))` collapses the `256×8×8` tensor into a `256`-d vector, followed by `Linear(256 → 128) → BatchNorm1d(128) → LeakyReLU(0.01) → Dropout(0.3)`. Each standalone custom CNN contains **`422,049` trainable parameters** (`422,565` for the 5-class race model).
-- **Initialization**: Convolutional and linear weights use Kaiming He Normal initialization ($W \sim \mathcal{N}(0, \frac{2}{(1 + a^2)n_{\text{in}}})$ with $a = 0.01$).
+- **Initialization**: Convolutional and linear weights use Kaiming He Normal initialization (`kaiming_normal_` with `a = 0.01`).
 
 ### 3.2. Task Heads and Loss Functions
 
-1. **Binary Gender Classification (`BinaryGenderCNN`)**:
-   - Output: Single logit $z \in \mathbb{R}$, probability $\hat{p} = \sigma(z)$.
-   - Loss: `nn.BCEWithLogitsLoss()`:
-     $$\mathcal{L}_{\text{gender}} = -\left[y \ln \sigma(z) + (1 - y)\ln(1 - \sigma(z))\right]$$
+#### 1. Binary Gender Classification (`BinaryGenderCNN`)
+- **Output**: Single logit $z \in \mathbb{R}$, probability $\hat{p} = \sigma(z)$.
+- **Loss**: Binary Cross-Entropy with Logits (`nn.BCEWithLogitsLoss()`):
 
-2. **Multi-class Race Classification (`MultiClassRaceCNN`)**:
-   - Output: 5 logits $\mathbf{z} \in \mathbb{R}^5$, probabilities $\hat{p}_c = \text{Softmax}(\mathbf{z})_c$.
-   - Loss: Weighted Cross-Entropy (`nn.CrossEntropyLoss(weight=class_weights)`):
-     $$\mathcal{L}_{\text{race}} = -w_y \ln \frac{e^{z_y}}{\sum_{j=0}^{4} e^{z_j}}$$
+$$
+L_{\text{gender}} = -\left[y \ln \sigma(z) + (1 - y)\ln(1 - \sigma(z))\right]
+$$
 
-3. **Age Regression (`AgeRegressionCNN`)**:
-   - Output: Unbounded scalar $\hat{y} \in \mathbb{R}$ (Identity activation).
-   - Loss: Huber Loss (`nn.SmoothL1Loss(beta=5.0)`):
-     $$\mathcal{L}_{\text{age}}(y, \hat{y}) = \begin{cases} \frac{1}{2\beta}(y - \hat{y})^2 & \text{if } |y - \hat{y}| < \beta \\ |y - \hat{y}| - \frac{1}{2}\beta & \text{otherwise} \end{cases}$$
-     Errors within `5` years are penalized quadratically for smooth convergence near the optimum, whereas errors exceeding `5` years (such as those on elderly outliers) incur a linear penalty with bounded gradient $\pm 1$.
+#### 2. Multi-class Race Classification (`MultiClassRaceCNN`)
+- **Output**: 5 logits $z \in \mathbb{R}^5$, probabilities $\hat{p}_c = \text{Softmax}(z)_c$.
+- **Loss**: Weighted Cross-Entropy (`nn.CrossEntropyLoss(weight=class_weights)`):
 
-4. **Multi-Task Transfer Learning (`MultiTaskFaceResNet`)**:
-   - Backbone: ImageNet-pretrained `ResNet-18` (`512`-d feature output, `11,374,791` total parameters) connected to three parallel two-layer MLP heads (`gender_head`, `race_head`, `age_head`).
-   - Joint Loss: Age targets are scaled to $y_{\text{scaled}} = y / 100.0 \in [0.01, 1.16]$ with $\beta = 0.05$, and optimized via:
-     $$\mathcal{L}_{\text{joint}} = \mathcal{L}_{\text{gender}} + \mathcal{L}_{\text{race}} + 10.0 \cdot \mathcal{L}_{\text{age\_scaled}}$$
+$$
+L_{\text{race}} = -w_y \ln \frac{\exp(z_y)}{\sum_{j=0}^{4} \exp(z_j)}
+$$
+
+#### 3. Age Regression (`AgeRegressionCNN`)
+- **Output**: Unbounded scalar $\hat{y} \in \mathbb{R}$ (Identity activation).
+- **Loss**: Huber / Smooth L1 Loss (`nn.SmoothL1Loss(beta=5.0)`):
+
+$$
+L_{\text{age}}(y, \hat{y}) = \frac{1}{2\beta}(y - \hat{y})^2 \quad \text{for } |y - \hat{y}| < \beta
+$$
+
+$$
+L_{\text{age}}(y, \hat{y}) = |y - \hat{y}| - \frac{1}{2}\beta \quad \text{for } |y - \hat{y}| \ge \beta
+$$
+
+Errors within `5` years are penalized quadratically for smooth convergence near the optimum, whereas errors exceeding `5` years (such as those on elderly outliers) incur a linear penalty with bounded gradient `±1`.
+
+#### 4. Multi-Task Transfer Learning (`MultiTaskFaceResNet`)
+- **Backbone**: ImageNet-pretrained `ResNet-18` (`512`-d feature output, `11,374,791` total parameters) connected to three parallel two-layer MLP heads (`gender_head`, `race_head`, `age_head`).
+- **Joint Loss**: Age targets are scaled to `y / 100.0` in `[0.01, 1.16]` with `beta = 0.05`, and optimized via:
+
+$$
+L_{\text{joint}} = L_{\text{gender}} + L_{\text{race}} + 10.0 \cdot L_{\text{age}}
+$$
 
 ---
 
@@ -164,6 +189,6 @@ Residual connections and ImageNet pretraining enable finer texture extraction (w
 
 ## 5. Limitations and Future Work
 
-1. **Class Weight Smoothing for `Race`**: Using dampened weights $w_c^{\alpha} = \left(\frac{N_{\text{total}}}{C \times N_c}\right)^\alpha$ with $\alpha \in [0.5, 0.7]$ or Focal Loss can reduce false-positive predictions into the `Others` category while preserving minority recall.
+1. **Class Weight Smoothing for `Race`**: Using dampened weights `w_c = (N_total / (C * N_c))^alpha` with `alpha` in `[0.5, 0.7]` or Focal Loss can reduce false-positive predictions into the `Others` category while preserving minority recall.
 2. **Face Detection Preprocessing for Wild Images**: UTKFace consists of pre-aligned face crops. Adding an automated face detector (e.g., MTCNN or RetinaFace) to crop faces before resizing to `128×128` eliminates scale mismatch when evaluating uncropped portrait photographs.
 3. **Label Distribution Learning for Age Estimation**: Modeling age as a soft Gaussian distribution over adjacent ages (DEX / Coral / LDL) can further reduce MAE below `5.0` years.

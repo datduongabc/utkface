@@ -62,10 +62,10 @@ Three malformed files missing the `race` field were excluded (`61_1_201701091424
 
 ### 3. Gender & Race Distributions (Classification Targets)
 
-Class imbalance is measured using the Imbalance Ratio ($\text{IR} = \max_c N_c / \min_c N_c$):
+Class imbalance is measured using the Imbalance Ratio (`IR = max(N_c) / min(N_c)`):
 
-- **Gender ($\text{IR} = 1.10\text{x}$)**: `Male` = `12,391` (`52.27%`), `Female` = `11,314` (`47.73%`). The distribution is balanced.
-- **Race ($\text{IR} = 5.96\text{x}$)**: Imbalanced toward `White` (`42.51%`) vs. `Others` (`7.14%`). Balanced class weights are computed as $w_c = \frac{N_{\text{total}}}{C \times N_c}$:
+- **Gender (`IR = 1.10x`)**: `Male` = `12,391` (`52.27%`), `Female` = `11,314` (`47.73%`). The distribution is balanced.
+- **Race (`IR = 5.96x`)**: Imbalanced toward `White` (`42.51%`) vs. `Others` (`7.14%`). Balanced class weights are computed as `w_c = N_total / (C * N_c)`:
 
 | Class ID | Ethnicity | Count ($N_c$) | Percentage | Class Weight ($w_c$) |
 | :---: | :--- | :---: | :---: | :---: |
@@ -102,7 +102,7 @@ Sampling `1,000` random images confirms uniform `200×200` RGB dimensions:
 | **Hidden Activation & Init** | `LeakyReLU(0.01)` + Kaiming He Normal | Prevents dead neurons from large gradients and stabilizes variance across convolutional layers. |
 | **Task 1: Gender** | `Linear(128 → 1)` + `Sigmoid`<br/>`nn.BCEWithLogitsLoss()` | Unweighted binary cross-entropy for balanced binary targets. |
 | **Task 2: Race** | `Linear(128 → 5)` + `Softmax`<br/>`nn.CrossEntropyLoss(weight=class_weights)` | Penalizes misclassification on minority classes (`Others`, `Asian`, `Indian`). |
-| **Task 3: Age** | `Linear(128 → 1)` (Identity)<br/>`nn.SmoothL1Loss(beta=5.0)` | Quadratic for small errors ($|e| < 5$ years) and linear for large errors to reduce sensitivity to elderly age outliers. |
+| **Task 3: Age** | `Linear(128 → 1)` (Identity)<br/>`nn.SmoothL1Loss(beta=5.0)` | Quadratic for small errors (under `5` years) and linear for large errors to reduce sensitivity to elderly age outliers. |
 | **Task 4: Multi-Task ResNet-18** | Pretrained `ResNet-18` backbone (`11.37M` params) + 3 task heads | Combines transfer learning and shared feature representation; scales age by `1/100` to balance task gradients. |
 
 ---
