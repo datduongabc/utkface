@@ -163,6 +163,10 @@ Fine-tuned for 8 epochs (best checkpoint at Epoch 5 with `Val Loss = 1.1765`), t
 #### Custom Image Inference
 ![Custom Image Inference](assets/09_custom_image_inference.png)
 
+**Limitations observed on custom inference**:
+1. **Shortcut Bias on Hairstyle (Tomboy Misclassification)**: The uploaded test subject is **Female** with a short tomboy haircut, but the model predicts **Male (`98.4%`)**. Because the model learns strong correlations between hair length and gender labels in the training data, short hair and a visible fade haircut override finer facial features and trigger a high-confidence false positive for `Male`.
+2. **Input Aspect Ratio and Framing Mismatch**: Unlike UTKFace images—which are `200×200` tightly cropped face chips—the uploaded photo is a non-square vertical portrait containing hair, neck, shoulders, and background. Directly resizing a rectangular portrait to `128×128` distorts facial proportions and introduces background noise, which also degrades ethnicity confidence (`Others: 28.1%`). Applying a face detector (such as MTCNN or RetinaFace) to crop a square bounding box around the inner face before resizing helps reduce both framing distortion and hairstyle bias.
+
 ---
 
 ## Usage

@@ -185,10 +185,18 @@ Fine-tuning the pretrained `ResNet-18` multi-task architecture for 8 epochs (bes
 
 Residual connections and ImageNet pretraining enable finer texture extraction (wrinkles, skin tone gradients, facial contours), while joint supervision regularizes the shared `512`-d representation across demographic tasks.
 
+### 4.5. Out-of-Distribution Failure Analysis (Custom Portrait Inference)
+
+Evaluating `MultiTaskFaceResNet` on an external, non-`200×200` portrait of a **Female** subject with a short tomboy hairstyle (`assets/09_custom_image_inference.png`) yielded predictions of `Male (98.4%)`, `Others (28.1%)`, and `Age: 22.6`. This test highlights two practical limitations:
+
+1. **Hairstyle Shortcut Bias in Gender Classification**: CNNs trained on natural facial datasets frequently latch onto secondary visual cues—particularly hair length—as a primary decision boundary for gender. When presented with a female subject sporting a short, masculine haircut, the network's reliance on hair silhouette overrides inner facial geometry (eyes, nose, jawline), resulting in a `98.4%` confident misclassification as `Male`.
+2. **Resolution and Framing Shift**: All `23,705` UTKFace images are pre-aligned `200×200` face crops (`1:1` aspect ratio) centered tightly on the eyes, nose, and mouth. Passing an uncropped vertical portrait directly into `Resize((128, 128))` warps the horizontal aspect ratio and exposes large regions of hair, neck, clothing, and studio background. This spatial mismatch shifts the feature activations away from the training distribution, flattening the race softmax probabilities (`Others: 28.1%`).
+
 ---
 
 ## 5. Limitations and Future Work
 
-1. **Class Weight Smoothing for `Race`**: Using dampened weights `w_c = (N_total / (C * N_c))^alpha` with `alpha` in `[0.5, 0.7]` or Focal Loss can reduce false-positive predictions into the `Others` category while preserving minority recall.
-2. **Face Detection Preprocessing for Wild Images**: UTKFace consists of pre-aligned face crops. Adding an automated face detector (e.g., MTCNN or RetinaFace) to crop faces before resizing to `128×128` eliminates scale mismatch when evaluating uncropped portrait photographs.
-3. **Label Distribution Learning for Age Estimation**: Modeling age as a soft Gaussian distribution over adjacent ages (DEX / Coral / LDL) can further reduce MAE below `5.0` years.
+1. **Mitigating Hairstyle Bias**: Cropping tighter around internal facial landmarks (excluding the upper hairline and ears) or applying targeted random erasing (`RandomErasing`) to hair regions during training can force the backbone to attend to craniofacial structure rather than haircut style.
+2. **Face Detection Preprocessing for Wild Images**: UTKFace consists of `200×200` pre-aligned face crops. Adding an automated face detector (e.g., MTCNN or RetinaFace) to extract a square `1:1` face bounding box before resizing to `128×128` eliminates aspect-ratio distortion when evaluating arbitrary portrait photographs.
+3. **Class Weight Smoothing for `Race`**: Using dampened weights `w_c = (N_total / (C * N_c))^alpha` with `alpha` in `[0.5, 0.7]` or Focal Loss can reduce false-positive predictions into the `Others` category while preserving minority recall.
+4. **Label Distribution Learning for Age Estimation**: Modeling age as a soft Gaussian distribution over adjacent ages (DEX / Coral / LDL) can further reduce MAE below `5.0` years.
