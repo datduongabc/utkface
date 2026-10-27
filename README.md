@@ -64,8 +64,7 @@ Thay vì chọn ngẫu nhiên kiến trúc mạng, hàm kích hoạt (Activation
 ### 2.1. Kiểm tra tính toàn vẹn & Làm sạch dữ liệu (Data Cleaning)
 
 - **Phát hiện trùng lặp thư mục trong gói dữ liệu gốc**: Gói `jangedoo/utkface-new` trên Kaggle chứa 3 thư mục con có ảnh trùng lặp (`UTKFace/` với `23,708` ảnh, `utkface_aligned_cropped/UTKFace/` với `23,708` ảnh, và `crop_part1/` với `9,780` ảnh). Nếu quét đệ quy toàn bộ mà không lọc, dữ liệu sẽ bị nhân bản gấp đôi gây hiện tượng **rò rỉ dữ liệu (Data Leakage)** giữa tập Train và tập Test. Dự án chỉ trích xuất duy nhất thư mục chuẩn `UTKFace/`.
-- **Quy tắc gán nhãn từ tên file**:
-  $$\text{[age]}\_\text{[gender]}\_\text{[race]}\_\text{[date\&time]}.\text{jpg}$$
+- **Quy tắc gán nhãn từ tên file**: [age]_[gender]_[race]_[date_time].jpg
   - `age`: Số nguyên thuộc đoạn $[1, 116]$.
   - `gender`: `0` = **Male (Nam)**, `1` = **Female (Nữ)**.
   - `race`: `0` = **White (Da trắng)**, `1` = **Black (Da đen)**, `2` = **Asian (Châu Á)**, `3` = **Indian (Ấn Độ)**, `4` = **Others (Khác)**.
@@ -231,10 +230,6 @@ Toàn bộ quá trình huấn luyện được thực hiện trên **Google Cola
 | **Asian (Châu Á)** | `1.381` | **`0.8806`** | `0.6155` | **`0.7246`** | `515` | Precision cao nhất (`88.1%`), ít bị báo dương tính giả nhất. |
 | **Indian (Ấn Độ)** | `1.193` | `0.7732` | `0.5034` | **`0.6098`** | `596` | Đúng `300` mẫu; `139` mẫu bị đẩy sang nhãn `Others` do nét tương đồng. |
 | **Others (Khác)** | `2.802` | `0.2349` | **`0.4449`** | **`0.3075`** | `254` | Nhờ $w_4 = 2.802$, Recall đạt `44.5%` (`113/254` mẫu) dù chỉ chiếm `7.1%` dữ liệu. |
-
-> [!NOTE]
-> **Phân tích đánh đổi Precision – Recall ở lớp thiểu số `Others`**:
-> Trên ma trận nhầm lẫn `5×5`, trọng số phạt lớn ($w_4 = 2.802$) buộc mô hình không được bỏ rơi lớp `Others`, giúp kéo **Recall lên `44.49%`**. Tuy nhiên, vì nhãn `Others` trong UTKFace là nhóm tổng hợp đa chủng tộc (Hispanic, Latino, Middle Eastern, người lai), mô hình có xu hướng dự đoán các mẫu có ánh sáng phức tạp từ lớp `Indian` (`139` mẫu) và `White` (`97` mẫu) sang `Others`, làm Precision của lớp này giảm xuống `23.49%`.
 
 ![Kết quả Huấn luyện và Ma trận Nhầm lẫn 5x5 MultiClassRaceCNN](assets/06_cnn_multiclass_race_results.png)
 
